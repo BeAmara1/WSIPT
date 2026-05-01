@@ -1,6 +1,7 @@
 import streamlit as st
 import random
 import requests
+import deep_translator
 from deep_translator import GoogleTranslator
 from utils.steam_api import get_owned_games, get_user_profile
 
