@@ -1,3 +1,11 @@
+import os
+import sys
+import streamlit as st
+
+st.write("PATH:", sys.path)
+st.write("ROOT FILES:", os.listdir())
+st.write("UTILS FOLDER:", os.listdir("utils") if os.path.exists("utils") else "NOT FOUND")
+
 import streamlit as st
 import pandas as pd
 
