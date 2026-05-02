@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
-import utils.steam_api
-st.write("IMPORT OK")
+
 from utils.steam_api import (
     get_owned_games,
     get_user_profile,
