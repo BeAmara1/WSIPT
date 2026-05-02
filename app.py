@@ -1,36 +1,29 @@
-import os
-import sys
-import streamlit as st
-
 import streamlit as st
 import pandas as pd
 
-import streamlit as st
-import pandas as pd
-
-import utils.steam_api
+from utils.steam_api import (
+    get_owned_games,
+    get_user_profile,
+    get_game_details
+)
 
 st.set_page_config(page_title="WSIPT", layout="wide")
 
 
-
 # =========================
-# 🎨 CSS AVANÇADO
+# 🎨 CSS
 # =========================
 st.markdown("""
 <style>
 
-/* Fundo geral */
 body {
     background-color: #0f172a;
 }
 
-/* Container principal */
 .block-container {
     padding-top: 2rem;
 }
 
-/* Cards */
 .card {
     background: linear-gradient(145deg, #1e293b, #0f172a);
     border-radius: 14px;
@@ -45,14 +38,12 @@ body {
     box-shadow: 0px 10px 25px rgba(0,0,0,0.8);
 }
 
-/* Imagem */
 .card img {
     width: 100%;
     border-radius: 10px;
     margin-bottom: 10px;
 }
 
-/* Título */
 .card-title {
     font-size: 18px;
     font-weight: 600;
@@ -60,19 +51,11 @@ body {
     margin-bottom: 5px;
 }
 
-/* Info */
 .card-info {
     font-size: 13px;
     color: #94a3b8;
 }
 
-/* Tabs */
-button[data-baseweb="tab"] {
-    font-size: 15px;
-    font-weight: 500;
-}
-
-/* Botões */
 .stButton>button {
     border-radius: 8px;
     background-color: #1e293b;
@@ -87,36 +70,46 @@ button[data-baseweb="tab"] {
 </style>
 """, unsafe_allow_html=True)
 
+
 # =========================
 # ESTADO
 # =========================
 if "logado" not in st.session_state:
     st.session_state.logado = False
 
+
 # =========================
-# FUNÇÃO
+# FUNÇÃO SEGURA
 # =========================
 def carregar_dados(steam_id):
-    profile = utils.steam_api.get_user_profile(steam_id)
-    jogos = utils.steam_api.get_owned_games(steam_id)
+    profile = get_user_profile(steam_id)
+    jogos = get_owned_games(steam_id)
 
-    if profile is None or jogos is None or jogos.empty:
+    if profile is None or jogos is None:
         return None, None
 
-    df = jogos.copy()
+    try:
+        df = pd.DataFrame(jogos)
 
-    df = df.rename(columns={
-        "name": "Nome",
-        "playtime_forever": "Minutos Jogados"
-    })
+        if df.empty:
+            return None, None
 
-    df["Horas Jogadas"] = (df["Minutos Jogados"] / 60).round(1)
+        df = df.rename(columns={
+            "name": "Nome",
+            "playtime_forever": "Minutos Jogados"
+        })
 
-    df["Status"] = df["Minutos Jogados"].apply(
-        lambda x: "Não iniciado" if x == 0 else "Jogado"
-    )
+        df["Horas Jogadas"] = (df["Minutos Jogados"] / 60).round(1)
 
-    return profile, df
+        df["Status"] = df["Minutos Jogados"].apply(
+            lambda x: "Não iniciado" if x == 0 else "Jogado"
+        )
+
+        return profile, df
+
+    except Exception:
+        return None, None
+
 
 # =========================
 # HOME
@@ -131,8 +124,8 @@ if not st.session_state.logado:
         if steam_id:
             profile, df = carregar_dados(steam_id)
 
-            if profile is None:
-                st.error("Steam ID inválido ou perfil privado.")
+            if profile is None or df is None:
+                st.error("Steam ID inválido, privado ou sem jogos.")
             else:
                 st.session_state.profile = profile
                 st.session_state.df = df
@@ -142,6 +135,7 @@ if not st.session_state.logado:
         else:
             st.warning("Digite um Steam ID válido")
 
+
 # =========================
 # APP
 # =========================
@@ -150,10 +144,12 @@ else:
     df = st.session_state.df
 
     col1, col2 = st.columns([1, 6])
+
     with col1:
-        st.image(profile["avatarfull"], width=70)
+        st.image(profile.get("avatarfull", ""), width=70)
+
     with col2:
-        st.markdown(f"### {profile['personaname']}")
+        st.markdown(f"### {profile.get('personaname', 'Usuário')}")
 
     if st.button("Sair"):
         st.session_state.clear()
@@ -172,7 +168,7 @@ else:
     with tab1:
         total = len(df)
         horas = int(df["Horas Jogadas"].sum())
-        nao = int((len(df[df["Status"] == "Não iniciado"]) / total) * 100)
+        nao = int((len(df[df["Status"] == "Não iniciado"]) / total) * 100) if total > 0 else 0
 
         c1, c2, c3 = st.columns(3)
         c1.metric("Jogos", total)
@@ -183,8 +179,10 @@ else:
     # RECOMENDAÇÃO
     # =========================
     with tab2:
-        tipo = st.selectbox("Tipo", ["Relaxar", "Ação", "História", "Multiplayer"])
-        prioridade = st.selectbox("Prioridade", ["Não iniciado", "Pouco jogado", "Tanto faz"])
+        prioridade = st.selectbox(
+            "Prioridade",
+            ["Não iniciado", "Pouco jogado", "Tanto faz"]
+        )
 
         if "historico_recomendacoes" not in st.session_state:
             st.session_state.historico_recomendacoes = []
@@ -217,8 +215,8 @@ else:
 
                 for i, (_, jogo) in enumerate(jogos.iterrows()):
                     nome = jogo["Nome"]
-                    detalhes = utils.steam_api.get_game_details(nome)
-                    imagem = detalhes["image"] if detalhes else ""
+                    detalhes = get_game_details(nome)
+                    imagem = detalhes.get("image", "") if detalhes else ""
 
                     with cols[i % 3]:
                         st.markdown(f"""
@@ -241,16 +239,18 @@ else:
     with tab4:
         nome = st.selectbox("Escolha um jogo", df["Nome"])
         jogo = df[df["Nome"] == nome].iloc[0]
-        detalhes = utils.steam_api.get_game_details(nome)
+
+        detalhes = get_game_details(nome)
 
         col1, col2 = st.columns([1, 2])
 
         with col1:
             if detalhes:
-                st.image(detalhes["image"], use_container_width=True)
+                st.image(detalhes.get("image", ""), use_container_width=True)
 
         with col2:
             st.subheader(nome)
             st.write(f"{jogo['Horas Jogadas']} horas")
+
             if detalhes:
-                st.write(detalhes["description"])
+                st.write(detalhes.get("description", ""))
