@@ -1,288 +1,246 @@
 import streamlit as st
-import random
-import requests
-import deep_translator
-from deep_translator import GoogleTranslator
-from utils.steam_api import get_owned_games, get_user_profile
+import pandas as pd
+from utils.steam_api import get_owned_games, get_user_profile, get_game_details
 
-# =========================
-# CONFIG
-# =========================
 st.set_page_config(page_title="WSIPT", layout="wide")
 
 # =========================
-# SESSION STATE
-# =========================
-if "df_salvo" not in st.session_state:
-    st.session_state.df_salvo = None
-
-if "profile_salvo" not in st.session_state:
-    st.session_state.profile_salvo = None
-
-if "ultimo_jogo" not in st.session_state:
-    st.session_state.ultimo_jogo = None
-
-# =========================
-# TRADUÇÃO
-# =========================
-def traduzir(texto):
-    try:
-        return GoogleTranslator(source='auto', target='pt').translate(texto)
-    except:
-        return texto
-
-# =========================
-# CACHE API STEAM
-# =========================
-@st.cache_data
-def get_game_details(appid):
-    try:
-        url = f"https://store.steampowered.com/api/appdetails?appids={appid}&l=pt-br"
-        response = requests.get(url, timeout=5)
-        data = response.json()
-
-        if data[str(appid)]["success"]:
-            jogo = data[str(appid)]["data"]
-
-            descricao = jogo.get("short_description", "")
-
-            if descricao:
-                descricao = traduzir(descricao)
-
-            return {
-                "descricao": descricao if descricao else "Sem descrição.",
-                "imagem": jogo.get("header_image", None),
-                "generos": [g["description"] for g in jogo.get("genres", [])]
-            }
-
-    except Exception as e:
-        print("Erro Steam API:", e)
-
-    return None
-
-# =========================
-# ESTILO
+# 🎨 CSS AVANÇADO
 # =========================
 st.markdown("""
 <style>
-.stApp { background-color: #1b2838; }
-h1, h2, h3, h4 { color: white; }
+
+/* Fundo geral */
+body {
+    background-color: #0f172a;
+}
+
+/* Container principal */
+.block-container {
+    padding-top: 2rem;
+}
+
+/* Cards */
+.card {
+    background: linear-gradient(145deg, #1e293b, #0f172a);
+    border-radius: 14px;
+    padding: 12px;
+    margin-bottom: 20px;
+    transition: all 0.25s ease;
+    box-shadow: 0px 6px 20px rgba(0,0,0,0.6);
+}
+
+.card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0px 10px 25px rgba(0,0,0,0.8);
+}
+
+/* Imagem */
+.card img {
+    width: 100%;
+    border-radius: 10px;
+    margin-bottom: 10px;
+}
+
+/* Título */
+.card-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: #f1f5f9;
+    margin-bottom: 5px;
+}
+
+/* Info */
+.card-info {
+    font-size: 13px;
+    color: #94a3b8;
+}
+
+/* Tabs */
+button[data-baseweb="tab"] {
+    font-size: 15px;
+    font-weight: 500;
+}
+
+/* Botões */
+.stButton>button {
+    border-radius: 8px;
+    background-color: #1e293b;
+    color: white;
+    border: 1px solid #334155;
+}
+
+.stButton>button:hover {
+    background-color: #334155;
+}
+
 </style>
 """, unsafe_allow_html=True)
 
 # =========================
-# LOGIN
+# ESTADO
 # =========================
-if st.session_state.df_salvo is None:
+if "logado" not in st.session_state:
+    st.session_state.logado = False
 
-    st.markdown("## 🎮 What Should I Play Tonight")
-    st.write("Conecte sua conta Steam para começar")
+# =========================
+# FUNÇÃO
+# =========================
+def carregar_dados(steam_id):
+    profile = get_user_profile(steam_id)
+    jogos = get_owned_games(steam_id)
+
+    if profile is None or jogos is None or jogos.empty:
+        return None, None
+
+    df = jogos.copy()
+
+    df = df.rename(columns={
+        "name": "Nome",
+        "playtime_forever": "Minutos Jogados"
+    })
+
+    df["Horas Jogadas"] = (df["Minutos Jogados"] / 60).round(1)
+
+    df["Status"] = df["Minutos Jogados"].apply(
+        lambda x: "Não iniciado" if x == 0 else "Jogado"
+    )
+
+    return profile, df
+
+# =========================
+# HOME
+# =========================
+if not st.session_state.logado:
+    st.title("What Should I Play Tonight")
+    st.write("Descubra o próximo jogo ideal da sua biblioteca Steam")
 
     steam_id = st.text_input("Digite seu Steam ID")
-    confirmar = st.button("🔍 Conectar")
 
-    if confirmar:
-        profile = get_user_profile(steam_id)
-        df = get_owned_games(steam_id)
+    if st.button("Entrar"):
+        if steam_id:
+            profile, df = carregar_dados(steam_id)
 
-        if profile and df is not None:
-            st.session_state.df_salvo = df
-            st.session_state.profile_salvo = profile
-            st.rerun()
+            if profile is None:
+                st.error("Steam ID inválido ou perfil privado.")
+            else:
+                st.session_state.profile = profile
+                st.session_state.df = df
+                st.session_state.logado = True
+                st.session_state.historico_recomendacoes = []
+                st.rerun()
         else:
-            st.error("Erro ao carregar dados da Steam. Verifique o ID ou privacidade do perfil.")
+            st.warning("Digite um Steam ID válido")
 
 # =========================
-# APP PRINCIPAL
+# APP
 # =========================
 else:
+    profile = st.session_state.profile
+    df = st.session_state.df
 
-    profile = st.session_state.profile_salvo
-    df = st.session_state.df_salvo
+    col1, col2 = st.columns([1, 6])
+    with col1:
+        st.image(profile["avatarfull"], width=70)
+    with col2:
+        st.markdown(f"### {profile['personaname']}")
+
+    if st.button("Sair"):
+        st.session_state.clear()
+        st.rerun()
+
+    tab1, tab2, tab3, tab4 = st.tabs([
+        "Perfil",
+        "Recomendação",
+        "Biblioteca",
+        "Inspecionar"
+    ])
 
     # =========================
     # PERFIL
     # =========================
-    col1, col2 = st.columns([1, 5])
-
-    with col1:
-        st.image(profile["avatarfull"], width=120)
-
-    with col2:
-        st.markdown(f"# {profile['personaname']}")
-        st.caption("Conta conectada")
-
-    if st.button("🔓 Desconectar"):
-        st.session_state.df_salvo = None
-        st.session_state.profile_salvo = None
-        st.session_state.ultimo_jogo = None
-        st.rerun()
-
-    st.divider()
-
-    # =========================
-    # TABS
-    # =========================
-    tab1, tab2 = st.tabs(["🎯 Recomendação", "📚 Biblioteca"])
-
-    # =====================================================
-    # 🎯 RECOMENDAÇÃO
-    # =====================================================
     with tab1:
+        total = len(df)
+        horas = int(df["Horas Jogadas"].sum())
+        nao = int((len(df[df["Status"] == "Não iniciado"]) / total) * 100)
 
-        st.subheader("O que jogar hoje?")
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Jogos", total)
+        c2.metric("Horas", horas)
+        c3.metric("Não iniciados", f"{nao}%")
 
-        tempo_disponivel = st.selectbox(
-            "Quanto tempo você tem hoje?",
-            ["30 min", "1 hora", "2 horas", "3+ horas"]
-        )
-
-        mood = st.selectbox(
-            "O que você quer hoje?",
-            [
-                "Descobrir algo novo",
-                "Continuar um jogo",
-                "Jogar algo confiável",
-                "Me surpreenda"
-            ]
-        )
-
-        if st.button("🎮 Recomendar jogo"):
-
-            jogos = df.copy()
-
-            nao_iniciados = jogos[jogos["playtime_forever"] == 0]
-            pouco_jogados = jogos[
-                (jogos["playtime_forever"] > 0) &
-                (jogos["playtime_forever"] < 300)
-            ]
-            muito_jogados = jogos[jogos["playtime_forever"] >= 300]
-
-            if mood == "Descobrir algo novo":
-                pool = nao_iniciados
-            elif mood == "Continuar um jogo":
-                pool = pouco_jogados
-            elif mood == "Jogar algo confiável":
-                pool = muito_jogados
-            elif mood == "Me surpreenda":
-                pool = jogos.sample(min(len(jogos), 20))
-            else:
-                pool = jogos
-
-            if pool.empty:
-                pool = jogos
-
-            if tempo_disponivel == "30 min":
-                pool = pool[pool["playtime_forever"] > 0]
-            elif tempo_disponivel == "3+ horas":
-                if not nao_iniciados.empty:
-                    pool = nao_iniciados
-
-            if pool.empty:
-                pool = jogos
-
-            pool = pool[pool["name"] != st.session_state.ultimo_jogo]
-
-            if pool.empty:
-                pool = jogos
-
-            escolhido = pool.sample(1).iloc[0]
-            st.session_state.ultimo_jogo = escolhido["name"]
-
-            appid = escolhido["appid"]
-            detalhes = get_game_details(appid)
-
-            imagem = detalhes["imagem"] if detalhes else f"https://cdn.cloudflare.steamstatic.com/steam/apps/{appid}/header.jpg"
-            descricao = detalhes["descricao"] if detalhes else "Descrição não disponível."
-
-            col1, col2 = st.columns([2, 3])
-
-            with col1:
-                st.image(imagem)
-
-            with col2:
-                st.markdown(f"## 🎮 {escolhido['name']}")
-                st.success("Recomendação da noite")
-                st.write(descricao)
-
-    # =====================================================
-    # 📚 BIBLIOTECA
-    # =====================================================
+    # =========================
+    # RECOMENDAÇÃO
+    # =========================
     with tab2:
+        tipo = st.selectbox("Tipo", ["Relaxar", "Ação", "História", "Multiplayer"])
+        prioridade = st.selectbox("Prioridade", ["Não iniciado", "Pouco jogado", "Tanto faz"])
 
-        st.subheader("Biblioteca")
+        if "historico_recomendacoes" not in st.session_state:
+            st.session_state.historico_recomendacoes = []
 
-        biblioteca_df = df.rename(
-            columns={
-                "name": "Nome do jogo",
-                "playtime_forever": "Tempo jogado (min)"
-            }
-        )
+        col1, col2 = st.columns(2)
+        gerar = col1.button("Gerar")
+        novas = col2.button("Novas")
 
-        ordem = st.selectbox(
-            "Ordenar por",
-            [
-                "Alfabética (A-Z)",
-                "Alfabética (Z-A)",
-                "Tempo crescente",
-                "Tempo decrescente"
-            ]
-        )
+        if gerar or novas:
+            df_f = df.copy()
 
-        unidade = st.radio(
-            "Unidade de tempo",
-            ["Minutos", "Horas"],
-            horizontal=True
-        )
+            if prioridade == "Não iniciado":
+                df_f = df_f[df_f["Status"] == "Não iniciado"]
+            elif prioridade == "Pouco jogado":
+                df_f = df_f[df_f["Horas Jogadas"] < 2]
 
-        tabela = biblioteca_df.copy()
+            df_f_novo = df_f[~df_f["Nome"].isin(st.session_state.historico_recomendacoes)]
 
-        if unidade == "Horas":
-            tabela["Tempo jogado"] = (tabela["Tempo jogado (min)"] / 60).round(1)
-        else:
-            tabela["Tempo jogado"] = tabela["Tempo jogado (min)"]
+            if df_f_novo.empty:
+                st.warning("Você já viu tudo para esse filtro.")
+                if st.button("Recomeçar"):
+                    st.session_state.historico_recomendacoes = []
+                    st.rerun()
 
-        if ordem == "Alfabética (A-Z)":
-            tabela = tabela.sort_values("Nome do jogo")
-        elif ordem == "Alfabética (Z-A)":
-            tabela = tabela.sort_values("Nome do jogo", ascending=False)
-        elif ordem == "Tempo crescente":
-            tabela = tabela.sort_values("Tempo jogado")
-        elif ordem == "Tempo decrescente":
-            tabela = tabela.sort_values("Tempo jogado", ascending=False)
+            else:
+                jogos = df_f_novo.sample(min(6, len(df_f_novo)))
+                st.session_state.historico_recomendacoes.extend(jogos["Nome"].tolist())
 
-        st.table(tabela[["Nome do jogo", "Tempo jogado"]])
+                cols = st.columns(3)
 
-        st.divider()
+                for i, (_, jogo) in enumerate(jogos.iterrows()):
+                    nome = jogo["Nome"]
+                    detalhes = get_game_details(nome)
+                    imagem = detalhes["image"] if detalhes else ""
 
-        st.subheader("🎮 Ver detalhes do jogo")
+                    with cols[i % 3]:
+                        st.markdown(f"""
+                        <div class="card">
+                            <img src="{imagem}">
+                            <div class="card-title">{nome}</div>
+                            <div class="card-info">{jogo['Horas Jogadas']} horas</div>
+                        </div>
+                        """, unsafe_allow_html=True)
 
-        jogo_selecionado = st.selectbox(
-            "Escolha um jogo",
-            tabela["Nome do jogo"]
-        )
+    # =========================
+    # BIBLIOTECA
+    # =========================
+    with tab3:
+        st.dataframe(df[["Nome", "Horas Jogadas", "Status"]], use_container_width=True)
 
-        jogo_info = tabela[tabela["Nome do jogo"] == jogo_selecionado].iloc[0]
-        appid = df[df["name"] == jogo_selecionado]["appid"].iloc[0]
+    # =========================
+    # INSPECIONAR
+    # =========================
+    with tab4:
+        nome = st.selectbox("Escolha um jogo", df["Nome"])
+        jogo = df[df["Nome"] == nome].iloc[0]
+        detalhes = get_game_details(nome)
 
-        detalhes = get_game_details(appid)
-
-        if detalhes:
-            imagem = detalhes["imagem"]
-            descricao = detalhes["descricao"]
-        else:
-            imagem = f"https://cdn.cloudflare.steamstatic.com/steam/apps/{appid}/header.jpg"
-            descricao = "Descrição não disponível."
-
-        horas = jogo_info["Tempo jogado (min)"] / 60
-
-        col1, col2 = st.columns([2, 3])
+        col1, col2 = st.columns([1, 2])
 
         with col1:
-            st.image(imagem)
+            if detalhes:
+                st.image(detalhes["image"], use_container_width=True)
 
         with col2:
-            st.markdown(f"## {jogo_selecionado}")
-            st.write(f"⏱️ {horas:.1f} horas jogadas")
-            st.write("📖 Sobre o jogo:")
-            st.write(descricao)
+            st.subheader(nome)
+            st.write(f"{jogo['Horas Jogadas']} horas")
+            if detalhes:
+                st.write(detalhes["description"])

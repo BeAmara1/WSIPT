@@ -49,3 +49,47 @@ def get_user_profile(steam_id):
 
     except Exception:
         return None
+
+
+# =========================
+# NOVA FUNÇÃO (COLE AQUI)
+# =========================
+def get_game_details(game_name):
+    try:
+        url = f"https://store.steampowered.com/api/storesearch/?term={game_name}&l=portuguese&cc=BR"
+        response = requests.get(url)
+
+        if response.status_code != 200:
+            return None
+
+        data = response.json()
+
+        if not data["items"]:
+            return None
+
+        game = data["items"][0]
+        appid = game["id"]
+
+        details_url = f"https://store.steampowered.com/api/appdetails?appids={appid}&l=portuguese"
+        details_response = requests.get(details_url)
+
+        if details_response.status_code != 200:
+            return None
+
+        details_data = details_response.json()
+
+        if not details_data[str(appid)]["success"]:
+            return None
+
+        info = details_data[str(appid)]["data"]
+
+        return {
+            "image": info.get("header_image"),
+            "description": info.get("short_description")
+        }
+
+    except Exception:
+        return None
+    
+
+    
