@@ -1,15 +1,11 @@
 import requests
 
-# =========================
-# 🔧 CONFIGURAÇÃO STEAM API
-# =========================
 STEAM_API_KEY = "C24C3EC946D011B8B432B9D4369541F6"
-
 BASE_URL = "https://api.steampowered.com"
 
 
 # =========================
-# 👤 PERFIL DO USUÁRIO
+# 👤 PERFIL
 # =========================
 def get_user_profile(steam_id):
     try:
@@ -19,23 +15,19 @@ def get_user_profile(steam_id):
             "steamids": steam_id
         }
 
-        response = requests.get(url, params=params, timeout=10)
-        data = response.json()
+        r = requests.get(url, params=params, timeout=10)
+        data = r.json()
 
         players = data.get("response", {}).get("players", [])
-
-        if not players:
-            return None
-
-        return players[0]
+        return players[0] if players else None
 
     except Exception as e:
-        print("Erro get_user_profile:", e)
+        print("get_user_profile error:", e)
         return None
 
 
 # =========================
-# 🎮 JOGOS DA BIBLIOTECA
+# 🎮 JOGOS
 # =========================
 def get_owned_games(steam_id):
     try:
@@ -47,26 +39,24 @@ def get_owned_games(steam_id):
             "include_played_free_games": True
         }
 
-        response = requests.get(url, params=params, timeout=10)
-        data = response.json()
+        r = requests.get(url, params=params, timeout=10)
+        data = r.json()
 
-        games = data.get("response", {}).get("games", [])
-
-        if not games:
-            return None
-
-        return games
+        return data.get("response", {}).get("games", None)
 
     except Exception as e:
-        print("Erro get_owned_games:", e)
+        print("get_owned_games error:", e)
         return None
 
 
 # =========================
-# 🖼️ DETALHES DO JOGO
+# 🖼️ DETALHES DO JOGO (VERSÃO SEGURA)
 # =========================
 def get_game_details(game_name):
     try:
+        if not game_name:
+            return None
+
         url = "https://store.steampowered.com/api/storesearch/"
         params = {
             "term": game_name,
@@ -74,11 +64,10 @@ def get_game_details(game_name):
             "cc": "us"
         }
 
-        response = requests.get(url, params=params, timeout=10)
-        data = response.json()
+        r = requests.get(url, params=params, timeout=10)
+        data = r.json()
 
         items = data.get("items", [])
-
         if not items:
             return None
 
@@ -87,9 +76,10 @@ def get_game_details(game_name):
         return {
             "image": game.get("tiny_image", ""),
             "name": game.get("name", ""),
-            "id": game.get("id")
+            "id": game.get("id"),
+            "description": game.get("name", "")
         }
 
     except Exception as e:
-        print("Erro get_game_details:", e)
+        print("get_game_details error:", e)
         return None
