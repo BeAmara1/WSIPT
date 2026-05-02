@@ -2,18 +2,13 @@ import os
 import sys
 import streamlit as st
 
-st.write("PATH:", sys.path)
-st.write("ROOT FILES:", os.listdir())
-st.write("UTILS FOLDER:", os.listdir("utils") if os.path.exists("utils") else "NOT FOUND")
+import streamlit as st
+import pandas as pd
 
 import streamlit as st
 import pandas as pd
 
-try:
-    from utils.steam_api import get_owned_games
-    st.write("IMPORT OK")
-except Exception as e:
-    st.error(e)
+import utils.steam_api
 
 st.set_page_config(page_title="WSIPT", layout="wide")
 
@@ -102,8 +97,8 @@ if "logado" not in st.session_state:
 # FUNÇÃO
 # =========================
 def carregar_dados(steam_id):
-    profile = get_user_profile(steam_id)
-    jogos = get_owned_games(steam_id)
+    profile = utils.steam_api.get_user_profile(steam_id)
+    jogos = utils.steam_api.get_owned_games(steam_id)
 
     if profile is None or jogos is None or jogos.empty:
         return None, None
@@ -222,7 +217,7 @@ else:
 
                 for i, (_, jogo) in enumerate(jogos.iterrows()):
                     nome = jogo["Nome"]
-                    detalhes = get_game_details(nome)
+                    detalhes = utils.steam_api.get_game_details(nome)
                     imagem = detalhes["image"] if detalhes else ""
 
                     with cols[i % 3]:
@@ -246,7 +241,7 @@ else:
     with tab4:
         nome = st.selectbox("Escolha um jogo", df["Nome"])
         jogo = df[df["Nome"] == nome].iloc[0]
-        detalhes = get_game_details(nome)
+        detalhes = utils.steam_api.get_game_details(nome)
 
         col1, col2 = st.columns([1, 2])
 
