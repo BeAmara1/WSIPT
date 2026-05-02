@@ -1,8 +1,16 @@
 import streamlit as st
 import pandas as pd
-from utils.steam_api import get_owned_games, get_user_profile, get_game_details
+import utils.steam_api
+st.write("IMPORT OK")
+from utils.steam_api import (
+    get_owned_games,
+    get_user_profile,
+    get_game_details
+)
 
 st.set_page_config(page_title="WSIPT", layout="wide")
+
+
 
 # =========================
 # 🎨 CSS AVANÇADO
