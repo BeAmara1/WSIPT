@@ -11,7 +11,7 @@ st.set_page_config(page_title="WSIPT", layout="wide")
 
 
 # =========================
-# 🎨 CSS
+#  CSS
 # =========================
 st.markdown("""
 <style>
