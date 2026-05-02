@@ -1,3 +1,6 @@
+print(">>> STEAM_API CARREGOU <<<")
+print("FUNÇÕES:", dir())
+
 import requests
 
 STEAM_API_KEY = "C24C3EC946D011B8B432B9D4369541F6"
