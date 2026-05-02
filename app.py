@@ -9,11 +9,11 @@ st.write("UTILS FOLDER:", os.listdir("utils") if os.path.exists("utils") else "N
 import streamlit as st
 import pandas as pd
 
-from utils.steam_api import (
-    get_owned_games,
-    get_user_profile,
-    get_game_details
-)
+try:
+    from utils.steam_api import get_owned_games
+    st.write("IMPORT OK")
+except Exception as e:
+    st.error(e)
 
 st.set_page_config(page_title="WSIPT", layout="wide")
 
